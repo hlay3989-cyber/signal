@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Termux</title>
+<style>
+  html, body { margin: 0; background: #000; color: #e8e8e8; }
+  body {
+    font-family: "DejaVu Sans Mono", "Droid Sans Mono", Menlo, Consolas, "Courier New", monospace;
+    font-size: 15px; line-height: 1.35;
+    padding: 10px 10px 70px;
+  }
+  #out div { white-space: pre-wrap; word-break: break-word; min-height: 1.35em; }
+  .g { color: #3ddc6a; }
+  .r { color: #ff5f56; }
+  .y { color: #f5d94a; }
+  .d { color: #8a8a8a; }
+  #qr { background: #fff; width: min(72vw, 260px); margin: 14px 0 6px; line-height: 0; }
+  #qr svg { width: 100%; height: auto; display: block; }
+  #row { display: none; align-items: baseline; }
+  #ps { color: #3ddc6a; white-space: pre; }
+  #t {
+    flex: 1; min-width: 0; margin-left: 6px; padding: 0;
+    background: transparent; border: 0; outline: 0;
+    color: #e8e8e8; font: inherit; caret-color: #e8e8e8;
+  }
+  #keys {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; background: #1b1b1b; border-top: 1px solid #333;
+  }
+  #keys span {
+    flex: 1; text-align: center; padding: 14px 0; font-size: 13px; color: #cfcfcf;
+  }
+</style>
+</head>
+<body>
+<div id="out" aria-live="polite"></div>
+<div id="row"><span id="ps">auth&gt; T=</span><input id="t" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="input"></div>
+<div id="keys"><span>ESC</span><span>/</span><span>-</span><span>HOME</span><span>&#8593;</span><span>END</span><span>PGUP</span></div>
+
+<script>
+(function () {
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  var out = $("out"), row = $("row"), input = $("t");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var DELAY = reduce ? 0 : 170;
+
+  // تاريخ ووقت النهارده عند اللاعب، بس السنة دايماً 2040
+  function stamp() {
+    var d = new Date();
+    return pad(d.getDate()) + "-" + pad(d.getMonth() + 1) + "-2040 " +
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function add(text, cls) {
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    out.appendChild(d);
+    window.scrollTo(0, document.body.scrollHeight);
+    return d;
+  }
+
+  function play(list, done) {
+    var i = 0;
+    (function next() {
+      if (i >= list.length) { if (done) done(); return; }
+      var item = list[i++];
+      var text = typeof item.t === "function" ? item.t() : item.t;
+      add(text, item.c);
+      setTimeout(next, item.w === undefined ? DELAY : item.w);
+    })();
+  }
+
+  var BOOT = [
+    { t: "Welcome to Termux!", c: "g", w: 260 },
+    { t: "" },
+    { t: "Working with packages:", c: "d" },
+    { t: " * Search:  pkg search <query>", c: "d" },
+    { t: " * Install: pkg install <package>", c: "d", w: 400 },
+    { t: "" },
+    { t: "~ $ ./uplink --target 2040", w: 500 },
+    { t: "[..] opening channel" },
+    { t: "[..] carrier found", w: 400 },
+    { t: function () { return "[..] local time " + stamp(); } },
+    { t: "[!!] signal unstable (packet loss 87%)", c: "y" },
+    { t: "[!!] auth required", c: "r", w: 300 },
+    { t: "" }
+  ];
+
+  function norm(v) {
+    return v.replace(/^\s+|\s+$/g, "")
+      .replace(/^t\s*=\s*/i, "")
+      .replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 1632); })
+      .replace(/[.\s]/g, ":");
+  }
+  function ok(v) { return /^(0?3|15):?(00)?$/.test(norm(v)); }
+
+
+  // بيكتب الرسالة حرف حرف، وساعات يغلط ويمسح، زي واحد بيكتب فعلاً
+  function typeLines(lines, done) {
+    if (reduce) { for (var k = 0; k < lines.length; k++) add(lines[k]); return done(); }
+    var LET = "qwertyuiopasdfghjklzxcvbnm", li = 0;
+    (function nextLine() {
+      if (li >= lines.length) return done();
+      var text = lines[li++], d = add("");
+      if (text === "") return setTimeout(nextLine, 450);
+      var buf = "", i = 0, fixed = false;
+      function show(cursor) {
+        d.textContent = buf + (cursor === false ? "" : "\u2588");
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+      show();
+      (function step() {
+        if (i >= text.length) { show(false); return setTimeout(nextLine, 650 + Math.random() * 500); }
+        var ch = text.charAt(i);
+        if (!fixed && i > 2 && /[a-z]/.test(ch) && Math.random() < 0.03) {
+          var wrong = LET.charAt(Math.floor(Math.random() * 26));
+          if (wrong === ch) wrong = (ch === "e" ? "r" : "e");
+          buf += wrong; show();
+          return setTimeout(function () {
+            buf = buf.slice(0, -1); show(); fixed = true;
+            setTimeout(step, 170);
+          }, 380);
+        }
+        fixed = false;
+        buf += ch; i++; show();
+        var wait = 22 + Math.random() * 30;
+        if (ch === ".") wait += 350; else if (ch === ",") wait += 160;
+        setTimeout(step, wait);
+      })();
+    })();
+  }
+
+  var INTRO = [
+    { t: "auth ok", c: "g" },
+    { t: "[..] signal locked", w: 500 },
+    { t: "" },
+    { t: "S@2040:~ $ nano message.txt", w: 900 }
+  ];
+
+  var TEXT = [
+    "it's working. the signal is holding for the first time.",
+    "",
+    "my name is S. i was standing in the street when the nuclear blast hit, between america and iran. everything went white, then dark.",
+    "",
+    "i woke up in an old workshop. the year is 2040. nobody is here.",
+    "",
+    "i found a radio that still works. i sent you everything i could.",
+    "",
+    "i don't know if i'm still alive, or if this is all that's left of me.",
+    "",
+    "this moment is already written where you are. listen carefully. the clock stopped when it happened. remember that.",
+    "",
+    "i'm not asking you to believe me. i'm asking you to listen."
+  ];
+
+  var OUTRO = [
+    { t: "", w: 500 },
+    { t: "S@2040:~ $ ./send --to 2026", w: 900 },
+    { t: "[..] sending", w: 1600 },
+    { t: function () { return "[ok] sent " + stamp(); }, c: "g", w: 900 },
+    { t: "" },
+    { t: "[..] second packet queued", w: 700 }
+  ];
+
+
+  var QR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37" shape-rendering="crispEdges"><rect width="37" height="37" fill="#fff"/><path fill="#000" d="M4 4h7v1h-7zM14 4h1v1h-1zM16 4h2v1h-2zM20 4h4v1h-4zM26 4h7v1h-7zM4 5h1v1h-1zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM17 5h5v1h-5zM26 5h1v1h-1zM32 5h1v1h-1zM4 6h1v1h-1zM6 6h3v1h-3zM10 6h1v1h-1zM16 6h1v1h-1zM20 6h1v1h-1zM22 6h2v1h-2zM26 6h1v1h-1zM28 6h3v1h-3zM32 6h1v1h-1zM4 7h1v1h-1zM6 7h3v1h-3zM10 7h1v1h-1zM12 7h3v1h-3zM16 7h4v1h-4zM21 7h1v1h-1zM24 7h1v1h-1zM26 7h1v1h-1zM28 7h3v1h-3zM32 7h1v1h-1zM4 8h1v1h-1zM6 8h3v1h-3zM10 8h1v1h-1zM13 8h1v1h-1zM20 8h1v1h-1zM22 8h3v1h-3zM26 8h1v1h-1zM28 8h3v1h-3zM32 8h1v1h-1zM4 9h1v1h-1zM10 9h1v1h-1zM12 9h2v1h-2zM15 9h2v1h-2zM19 9h3v1h-3zM24 9h1v1h-1zM26 9h1v1h-1zM32 9h1v1h-1zM4 10h7v1h-7zM12 10h1v1h-1zM14 10h1v1h-1zM16 10h1v1h-1zM18 10h1v1h-1zM20 10h1v1h-1zM22 10h1v1h-1zM24 10h1v1h-1zM26 10h7v1h-7zM13 11h3v1h-3zM18 11h2v1h-2zM24 11h1v1h-1zM4 12h5v1h-5zM10 12h4v1h-4zM15 12h1v1h-1zM17 12h2v1h-2zM21 12h1v1h-1zM25 12h1v1h-1zM27 12h1v1h-1zM29 12h1v1h-1zM31 12h1v1h-1zM4 13h2v1h-2zM7 13h1v1h-1zM11 13h1v1h-1zM14 13h1v1h-1zM16 13h2v1h-2zM20 13h5v1h-5zM26 13h1v1h-1zM28 13h1v1h-1zM32 13h1v1h-1zM4 14h1v1h-1zM6 14h2v1h-2zM10 14h3v1h-3zM14 14h1v1h-1zM18 14h3v1h-3zM22 14h1v1h-1zM25 14h1v1h-1zM27 14h2v1h-2zM5 15h2v1h-2zM8 15h2v1h-2zM11 15h2v1h-2zM16 15h1v1h-1zM23 15h1v1h-1zM26 15h1v1h-1zM29 15h1v1h-1zM31 15h1v1h-1zM4 16h11v1h-11zM16 16h2v1h-2zM19 16h3v1h-3zM25 16h1v1h-1zM27 16h1v1h-1zM29 16h2v1h-2zM4 17h3v1h-3zM8 17h2v1h-2zM17 17h1v1h-1zM20 17h1v1h-1zM23 17h2v1h-2zM26 17h3v1h-3zM32 17h1v1h-1zM5 18h1v1h-1zM7 18h4v1h-4zM12 18h9v1h-9zM24 18h7v1h-7zM7 19h1v1h-1zM12 19h1v1h-1zM14 19h2v1h-2zM18 19h1v1h-1zM20 19h1v1h-1zM22 19h1v1h-1zM28 19h1v1h-1zM31 19h1v1h-1zM4 20h1v1h-1zM7 20h1v1h-1zM10 20h2v1h-2zM13 20h1v1h-1zM15 20h4v1h-4zM21 20h1v1h-1zM23 20h3v1h-3zM29 20h2v1h-2zM4 21h1v1h-1zM6 21h1v1h-1zM8 21h1v1h-1zM11 21h1v1h-1zM14 21h1v1h-1zM16 21h1v1h-1zM18 21h1v1h-1zM21 21h4v1h-4zM26 21h3v1h-3zM30 21h1v1h-1zM32 21h1v1h-1zM4 22h1v1h-1zM6 22h3v1h-3zM10 22h2v1h-2zM13 22h2v1h-2zM17 22h1v1h-1zM19 22h2v1h-2zM22 22h1v1h-1zM24 22h3v1h-3zM28 22h1v1h-1zM30 22h1v1h-1zM4 23h1v1h-1zM7 23h1v1h-1zM13 23h1v1h-1zM15 23h1v1h-1zM20 23h1v1h-1zM22 23h2v1h-2zM25 23h1v1h-1zM27 23h1v1h-1zM31 23h1v1h-1zM4 24h8v1h-8zM15 24h4v1h-4zM21 24h1v1h-1zM24 24h5v1h-5zM30 24h3v1h-3zM12 25h2v1h-2zM15 25h2v1h-2zM20 25h1v1h-1zM24 25h1v1h-1zM28 25h5v1h-5zM4 26h7v1h-7zM12 26h3v1h-3zM18 26h3v1h-3zM23 26h2v1h-2zM26 26h1v1h-1zM28 26h3v1h-3zM4 27h1v1h-1zM10 27h1v1h-1zM13 27h2v1h-2zM16 27h1v1h-1zM18 27h2v1h-2zM23 27h2v1h-2zM28 27h1v1h-1zM31 27h2v1h-2zM4 28h1v1h-1zM6 28h3v1h-3zM10 28h1v1h-1zM12 28h4v1h-4zM17 28h2v1h-2zM21 28h1v1h-1zM24 28h5v1h-5zM30 28h1v1h-1zM32 28h1v1h-1zM4 29h1v1h-1zM6 29h3v1h-3zM10 29h1v1h-1zM12 29h4v1h-4zM17 29h1v1h-1zM20 29h1v1h-1zM22 29h2v1h-2zM25 29h1v1h-1zM29 29h4v1h-4zM4 30h1v1h-1zM6 30h3v1h-3zM10 30h1v1h-1zM12 30h3v1h-3zM18 30h2v1h-2zM21 30h4v1h-4zM26 30h6v1h-6zM4 31h1v1h-1zM10 31h1v1h-1zM12 31h2v1h-2zM16 31h1v1h-1zM20 31h1v1h-1zM22 31h1v1h-1zM24 31h3v1h-3zM28 31h2v1h-2zM31 31h1v1h-1zM4 32h7v1h-7zM12 32h3v1h-3zM16 32h3v1h-3zM21 32h2v1h-2zM30 32h1v1h-1z"/></svg>';
+  var TOTAL = 136; // seconds ("1 minute and 76 seconds")
+  var EVENTS = [
+    [18,  "[!!] packet 2 corrupted, retrying", "y"],
+    [47,  "[!!] carrier lost", "r"],
+    [66,  "[..] reconnecting", ""],
+    [84,  "[..] carrier found", ""],
+    [109, "[!!] interference detected", "y"],
+    [126, "[..] reassembling", ""]
+  ];
+
+  function startLoading() {
+    var bar = add("[..] receiving [------------]   0%");
+    var t0 = Date.now(), ev = 0, finished = false;
+    var iv = setInterval(function () {
+      var el = (Date.now() - t0) / 1000;
+      if (el >= TOTAL) el = TOTAL;
+      var pct = Math.floor(el / TOTAL * 100);
+      var n = Math.floor(pct * 12 / 100);
+      bar.textContent = "[..] receiving [" + new Array(n + 1).join("#") + new Array(13 - n).join("-") + "] " + (pct < 10 ? "  " : pct < 100 ? " " : "") + pct + "%";
+      while (ev < EVENTS.length && el >= EVENTS[ev][0]) {
+        var e = EVENTS[ev++];
+        out.insertBefore(makeLine(e[1], e[2]), bar);
+      }
+      if (el >= TOTAL && !finished) {
+        finished = true; clearInterval(iv);
+        play([
+          { t: "" },
+          { t: "[ok] packet received", c: "g", w: 600 },
+          { t: "[..] decoding image", w: 1100 },
+          { t: "" }
+        ], function () {
+          var box = document.createElement("div");
+          box.id = "qr"; box.innerHTML = QR;
+          out.appendChild(box);
+          add("");
+          add("EOF", "d");
+          window.scrollTo(0, document.body.scrollHeight);
+        });
+      }
+    }, 250);
+  }
+
+  function makeLine(text, cls) {
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    return d;
+  }
+
+  var busy = false;
+  function submit() {
+    if (busy) return;
+    var v = input.value;
+    add("auth> T=" + v);
+    input.value = "";
+    if (ok(v)) {
+      busy = true;
+      row.style.display = "none";
+      play(INTRO, function () { typeLines(TEXT, function () { play(OUTRO, startLoading); }); });
+    } else {
+      add("auth failed: bad sync", "r");
+    }
+  }
+
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+  document.addEventListener("click", function () { if (row.style.display !== "none") input.focus(); });
+
+  play(BOOT, function () {
+    row.style.display = "flex";
+    input.focus();
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+})();
+</script>
+</body>
+</html>
