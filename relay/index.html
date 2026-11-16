@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Termux</title>
+<style>
+  html, body { margin: 0; background: #000; color: #e8e8e8; }
+  body {
+    font-family: "DejaVu Sans Mono", "Droid Sans Mono", Menlo, Consolas, "Courier New", monospace;
+    font-size: 15px; line-height: 1.35;
+    padding: 10px 10px 70px;
+  }
+  #out div { white-space: pre-wrap; word-break: break-word; min-height: 1.35em; }
+  .g { color: #3ddc6a; }
+  .r { color: #ff5f56; }
+  .y { color: #f5d94a; }
+  .d { color: #8a8a8a; }
+  a { color: #5fb0ff; }
+  #row { display: none; align-items: baseline; }
+  #ps { color: #3ddc6a; white-space: pre; }
+  #t {
+    flex: 1; min-width: 0; margin-left: 6px; padding: 0;
+    background: transparent; border: 0; outline: 0;
+    color: #e8e8e8; font: inherit; caret-color: #e8e8e8;
+  }
+  #keys {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    display: flex; background: #1b1b1b; border-top: 1px solid #333;
+  }
+  #keys span { flex: 1; text-align: center; padding: 14px 0; font-size: 13px; color: #cfcfcf; }
+</style>
+</head>
+<body>
+<div id="out" aria-live="polite"></div>
+<div id="row"><span id="ps">S@2040:~ $</span><input id="t" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="input"></div>
+<div id="keys"><span>ESC</span><span>/</span><span>-</span><span>HOME</span><span>&#8593;</span><span>END</span><span>PGUP</span></div>
+
+<script>
+(function () {
+  // ===== عدّل التاريخ ده: موعد الإشارة الجاية (بتوقيت جهاز اللاعب) =====
+  var LAUNCH = new Date("2026-12-31T00:00:00");
+
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  var out = $("out"), row = $("row"), input = $("t");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var DELAY = reduce ? 0 : 170;
+
+  // تاريخ ووقت النهارده عند اللاعب، بس السنة دايماً 2040
+  function stamp() {
+    var d = new Date();
+    return pad(d.getDate()) + "-" + pad(d.getMonth() + 1) + "-2040 " +
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  function add(text, cls) {
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    out.appendChild(d);
+    window.scrollTo(0, document.body.scrollHeight);
+    return d;
+  }
+
+  function play(list, done) {
+    var i = 0;
+    (function next() {
+      if (i >= list.length) { if (done) done(); return; }
+      var item = list[i++];
+      var text = typeof item.t === "function" ? item.t() : item.t;
+      add(text, item.c);
+      setTimeout(next, item.w === undefined ? DELAY : item.w);
+    })();
+  }
+
+
+  // بيكتب الرسالة حرف حرف، وساعات يغلط ويمسح، زي واحد بيكتب فعلاً
+  function typeLines(lines, done) {
+    if (reduce) { for (var k = 0; k < lines.length; k++) add(lines[k]); return done(); }
+    var LET = "qwertyuiopasdfghjklzxcvbnm", li = 0;
+    (function nextLine() {
+      if (li >= lines.length) return done();
+      var text = lines[li++], d = add("");
+      if (text === "") return setTimeout(nextLine, 450);
+      var buf = "", i = 0, fixed = false;
+      function show(cursor) {
+        d.textContent = buf + (cursor === false ? "" : "\u2588");
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+      show();
+      (function step() {
+        if (i >= text.length) { show(false); return setTimeout(nextLine, 650 + Math.random() * 500); }
+        var ch = text.charAt(i);
+        if (!fixed && i > 2 && /[a-z]/.test(ch) && Math.random() < 0.03) {
+          var wrong = LET.charAt(Math.floor(Math.random() * 26));
+          if (wrong === ch) wrong = (ch === "e" ? "r" : "e");
+          buf += wrong; show();
+          return setTimeout(function () {
+            buf = buf.slice(0, -1); show(); fixed = true;
+            setTimeout(step, 170);
+          }, 380);
+        }
+        fixed = false;
+        buf += ch; i++; show();
+        var wait = 22 + Math.random() * 30;
+        if (ch === ".") wait += 350; else if (ch === ",") wait += 160;
+        setTimeout(step, wait);
+      })();
+    })();
+  }
+
+  var FILES = {
+    "readme.txt": [
+      "if you can read this, the relay worked.",
+      "",
+      "the radio can only send me one thing at a time.",
+      "i have been sending you a sound. it isn't speech.",
+      "you can't hear what it says. you have to look at it."
+    ],
+    "log.txt": [
+      "[day 1] woke up. a workshop. a radio on the desk.",
+      "[day 1] everything outside is grey. no wind. no birds.",
+      "[day 2] i remember the street. the flash. falling.",
+      "[day 2] i don't remember hitting the ground.",
+      "[day 3] the radio only picks up one thing: you.",
+      "[day 3] every time i send a signal my hands feel heavier.",
+      "[day 4] i think i'm not here. i think i'm still lying on that street.",
+      "[day 4] i can only send the same message. i can't tell if anyone hears it.",
+      "[day 4] if you find it, say it back to me."
+    ]
+  };
+
+  function run(cmd) {
+    var raw = cmd.replace(/^\s+|\s+$/g, "");
+    if (!raw) return;
+    var parts = raw.split(/\s+/), name = parts[0].toLowerCase(), arg = (parts[1] || "").toLowerCase();
+
+    // the answer: whatever the sound spells, typed as a command
+    if (raw.toLowerCase().replace(/[^a-z]/g, "") === "wakeup") return ending();
+
+    if (name === "help") {
+      add("commands: help  ls  cat <file>  get <file>  clear");
+    } else if (name === "ls") {
+      add("readme.txt  log.txt  voice.wav");
+    } else if (name === "cat") {
+      if (!arg) add("cat: missing file operand", "r");
+      else if (FILES[arg]) { for (var i = 0; i < FILES[arg].length; i++) add(FILES[arg][i]); }
+      else if (arg === "voice.wav") add("cat: voice.wav: binary file. try: get voice.wav", "y");
+      else add("cat: " + parts[1] + ": No such file or directory", "r");
+    } else if (name === "get") {
+      if (arg === "voice.wav") {
+        var d = add("");
+        var a = document.createElement("a");
+        a.href = "../voice.wav"; a.download = "voice.wav"; a.textContent = "voice.wav (431 KB) - tap to download";
+        d.appendChild(a);
+      } else add("get: " + (parts[1] || "") + ": No such file", "r");
+    } else if (name === "clear") {
+      out.innerHTML = "";
+    } else if (name === "whoami") {
+      add("s");
+    } else {
+      add("bash: " + parts[0] + ": command not found", "r");
+    }
+  }
+
+  var LAST = [
+    "i heard you.",
+    "",
+    "the grey is thinning. there's light under the door.",
+    "",
+    "my hands are warm again.",
+    "",
+    "thank you for listening."
+  ];
+
+  function ending() {
+    row.style.display = "none";
+    play([
+      { t: "[ok] message received", c: "g", w: 900 },
+      { t: "[..] resyncing", w: 1200 },
+      { t: "[..] resyncing", w: 1200 },
+      { t: "[!!] signal unstable", c: "y", w: 900 },
+      { t: "" },
+      { t: "S@2040:~ $ nano last.txt", w: 1000 }
+    ], function () {
+      typeLines(LAST, function () {
+        play([
+          { t: "", w: 600 },
+          { t: "S@2040:~ $ ./send --to 2026", w: 900 },
+          { t: "[..] sending", w: 1600 },
+          { t: function () { return "[ok] sent " + stamp(); }, c: "g", w: 1000 },
+          { t: "" },
+          { t: "connection closed.", c: "d", w: 900 },
+          { t: "" }
+        ], function () {
+          var el = add("next transmission in: --", "y");
+          function render() {
+            var s = Math.max(0, Math.floor((LAUNCH - new Date()) / 1000));
+            el.textContent = "next transmission in: " + Math.floor(s / 86400) + "d " +
+              pad(Math.floor(s % 86400 / 3600)) + ":" + pad(Math.floor(s % 3600 / 60)) + ":" + pad(s % 60);
+          }
+          render(); setInterval(render, 1000);
+        });
+      });
+    });
+  }
+
+  function submit() {
+    var v = input.value;
+    add("S@2040:~ $ " + v);
+    input.value = "";
+    run(v);
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+  document.addEventListener("click", function () { if (row.style.display !== "none") input.focus(); });
+
+  play([
+    { t: "~ $ ./relay --open", w: 500 },
+    { t: "[..] opening relay" },
+    { t: "[ok] relay open", c: "g" },
+    { t: function () { return "[..] local time " + stamp(); } },
+    { t: "type help", c: "d" },
+    { t: "" }
+  ], function () {
+    row.style.display = "flex";
+    input.focus();
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+})();
+</script>
+</body>
+</html>
