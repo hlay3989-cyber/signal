@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>WARD 2</title>
+<style>
+  html, body { margin: 0; background: #070604; color: #ffb000; }
+  body {
+    font-family: "DejaVu Sans Mono", "Courier New", Courier, monospace;
+    font-size: 15px; line-height: 1.4;
+    padding: 12px 12px 40px;
+  }
+  #out div { white-space: pre-wrap; word-break: break-word; min-height: 1.4em; }
+  .dim { color: #8a6a1c; }
+  .red { color: #ff5a4a; }
+  .ok { color: #9be07a; }
+  a { color: #ffd27a; }
+  #row { display: none; align-items: baseline; }
+  #ps { white-space: pre; }
+  #t {
+    flex: 1; min-width: 0; margin-left: 8px; padding: 0;
+    background: transparent; border: 0; outline: 0;
+    color: #ffb000; font: inherit; caret-color: #ffb000; text-transform: none;
+  }
+  #vid { margin-top: 14px; }
+  #vid video { width: 100%; max-width: 640px; background: #000; display: block; }
+</style>
+</head>
+<body>
+<div id="out" aria-live="polite"></div>
+<div id="row"><span id="ps">room:</span><input id="t" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="input"></div>
+
+<script>
+(function () {
+  function $(id) { return document.getElementById(id); }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  var out = $("out"), row = $("row"), input = $("t");
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var DELAY = reduce ? 0 : 220;
+
+  // تاريخ ووقت النهارده عند اللاعب، بس السنة دايماً 2026
+  function stamp() {
+    var d = new Date();
+    return pad(d.getDate()) + "-" + pad(d.getMonth() + 1) + "-2026 " +
+      pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+  function add(text, cls) {
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    out.appendChild(d);
+    window.scrollTo(0, document.body.scrollHeight);
+    return d;
+  }
+  function play(list, done) {
+    var i = 0;
+    (function next() {
+      if (i >= list.length) { if (done) done(); return; }
+      var item = list[i++];
+      add(typeof item.t === "function" ? item.t() : item.t, item.c);
+      setTimeout(next, item.w === undefined ? DELAY : item.w);
+    })();
+  }
+
+  var FILES = {
+    "status.txt": [
+      "ST. ALDER MEDICAL CENTER",
+      "WARD 2",
+      "------------------------",
+      "BED:        204",
+      "PATIENT:    S. (full name on file)",
+      "AGE:        31",
+      "",
+      "ADMITTED:",
+      "- found unconscious on a street",
+      "  near the market",
+      "",
+      "CONDITION:",
+      "- unresponsive. stable.",
+      "",
+      "NOTES:",
+      "- no burns. no injuries.",
+      "- nothing in the street explains it.",
+      "- the doctor asks him every morning",
+      "  to move a finger. nothing yet.",
+      "- night nurse: faint static from the",
+      "  bedside radio. it is not plugged in.",
+      "",
+      "VISITORS:   none"
+    ]
+  };
+
+  var mode = "login";
+
+  function run(cmd) {
+    var raw = cmd.replace(/^\s+|\s+$/g, "");
+    if (!raw) return;
+    var parts = raw.split(/\s+/), name = parts[0].toLowerCase(), arg = (parts[1] || "").toLowerCase();
+
+    if (raw.toLowerCase().replace(/[^a-z]/g, "") === "move") return move();
+
+    if (name === "help") {
+      add("commands: help  ls  cat <file>  get <file>  clear");
+    } else if (name === "ls") {
+      add("status.txt  heartbeat.wav");
+    } else if (name === "cat") {
+      if (!arg) add("cat: missing file", "red");
+      else if (FILES[arg]) { for (var i = 0; i < FILES[arg].length; i++) add(FILES[arg][i]); }
+      else if (arg === "heartbeat.wav") add("binary file. try: get heartbeat.wav", "dim");
+      else add("cat: " + parts[1] + ": no such file", "red");
+    } else if (name === "get") {
+      if (arg === "heartbeat.wav") {
+        var d = add("");
+        var a = document.createElement("a");
+        a.href = "../heartbeat.wav"; a.download = "heartbeat.wav"; a.textContent = "heartbeat.wav (861 KB) - tap to download";
+        d.appendChild(a);
+      } else add("get: " + (parts[1] || "") + ": no such file", "red");
+    } else if (name === "clear") {
+      out.innerHTML = "";
+    } else {
+      add("unknown command: " + parts[0], "red");
+    }
+  }
+
+  function move() {
+    row.style.display = "none"; mode = "done";
+    play([
+      { t: "[ok] command sent to unit 204", c: "ok", w: 1400 },
+      { t: "[..] monitoring", w: 1500 },
+      { t: "[..] pulse 72", w: 1800 },
+      { t: "[..] pulse 90", w: 1500 },
+      { t: "[!!] patient response detected", c: "red", w: 2200 }
+    ], function () {
+      var box = document.createElement("div");
+      box.id = "vid";
+      var v = document.createElement("video");
+      v.src = "../signal_02.mp4"; v.controls = true; v.playsInline = true; v.setAttribute("playsinline", "");
+      box.appendChild(v); out.appendChild(box);
+      window.scrollTo(0, document.body.scrollHeight);
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+    });
+  }
+
+  function submit() {
+    var v = input.value;
+    if (mode === "login") {
+      add("room: " + v);
+      input.value = "";
+      if (/204/.test(v)) {
+        mode = "shell"; $("ps").textContent = "ward>";
+        play([
+          { t: "[ok] unit 204 attached", c: "ok" },
+          { t: "type help", c: "dim" },
+          { t: "" }
+        ]);
+      } else {
+        add("ACCESS DENIED", "red");
+      }
+    } else if (mode === "shell") {
+      add("ward> " + v);
+      input.value = "";
+      run(v);
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+  }
+
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+  document.addEventListener("click", function () { if (row.style.display !== "none") input.focus(); });
+
+  play([
+    { t: "ST. ALDER MEDICAL CENTER" },
+    { t: "WARD 2 TERMINAL v2.3", c: "dim", w: 500 },
+    { t: "" },
+    { t: "[..] connecting to bedside units" },
+    { t: function () { return "[..] local time " + stamp(); } },
+    { t: "[!!] unit 204: no response (14 days)", c: "red" },
+    { t: "[..] manual access required", w: 400 },
+    { t: "" }
+  ], function () {
+    row.style.display = "flex";
+    input.focus();
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+})();
+</script>
+</body>
+</html>
